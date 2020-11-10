@@ -46,7 +46,7 @@ object SimRankExample {
         Edge(5L, 3L, 1.0)
       ))
 
-    val aEdges = edges // .union(edges.map(x => Edge(x.dstId, x.srcId, x.attr)))
+    val aEdges = edges.union(edges.map(x => Edge(x.dstId, x.srcId, x.attr)))
     val graph = Graph(vertices, aEdges)
 
     // graph.outDegrees : VertexId, Count(OutDegrees)
@@ -75,13 +75,14 @@ object SimRankExample {
     val delta = 0.8
     var tempMatrix = identityMatrix
     var resultMatrix = tempMatrix
-    for (i <- 0 to 5) {
+    for (i <- 0 to 10) {
       resultMatrix = new CoordinateMatrix(
         weightMatrix.toBlockMatrix.transpose
           .multiply(tempMatrix.toBlockMatrix)
           .multiply(weightMatrix.toBlockMatrix)
           .toCoordinateMatrix.entries.map {
           x =>
+
             var w = x.value * delta
             if (x.i == x.j && w < 1.0) {
              w = 1.0
