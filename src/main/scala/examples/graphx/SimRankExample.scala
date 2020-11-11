@@ -58,6 +58,8 @@ object SimRankExample {
         MatrixEntry(x._1, x._2, x._3)
     })
 
+    weightMatrix.entries.foreach(println)
+
     val identityMatrix = new CoordinateMatrix(graph.vertices.map { x =>
       MatrixEntry(x._1, x._1, 1.0)
     })
@@ -79,7 +81,7 @@ object SimRankExample {
             }
 
             MatrixEntry(x.i, x.j, w)
-        }).toBlockMatrix().toCoordinateMatrix()
+        })
       tempMatrix = resultMatrix
     }
 
