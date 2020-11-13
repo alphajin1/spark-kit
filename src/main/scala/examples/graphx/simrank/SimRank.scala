@@ -1,5 +1,6 @@
 package examples.graphx.simrank
 
+import org.apache.log4j.Logger
 import org.apache.spark.graphx.{Edge, Graph, VertexId}
 import org.apache.spark.mllib.linalg.distributed.{CoordinateMatrix, MatrixEntry}
 import org.apache.spark.rdd.RDD
@@ -13,6 +14,7 @@ import org.apache.spark.rdd.RDD
  */
 object SimRank {
 
+  val logger = Logger.getRootLogger
   /**
    * UnDirectedGraph 생성 후 반환
    *
@@ -102,7 +104,7 @@ object SimRank {
     val numOfVertices = graph.vertices.count()
     val identityMatrix = new CoordinateMatrix(graph.vertices.map { x =>
       MatrixEntry(x._1, x._1, 1.0)
-    })
+    }, nRows = numOfVertices, nCols = numOfVertices)
 
     val weightMatrix = new CoordinateMatrix(normalizedEdges.map {
       x =>
@@ -112,6 +114,8 @@ object SimRank {
     var tempMatrix = identityMatrix
     var resultMatrix = tempMatrix
     for (i <- 0 to iteration) {
+      logger.warn(s"Iteration $i started.")
+
       resultMatrix = new CoordinateMatrix(
         weightMatrix.toBlockMatrix.transpose
           .multiply(tempMatrix.toBlockMatrix)
@@ -125,7 +129,7 @@ object SimRank {
             }
 
             MatrixEntry(x.i, x.j, w)
-        })
+        }, nRows = numOfVertices, nCols = numOfVertices)
       tempMatrix = resultMatrix
     }
 
