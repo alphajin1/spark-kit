@@ -4,10 +4,10 @@ import examples.graphx.simrank.SimRank.logger
 import org.apache.spark.graphx.{Edge, EdgeDirection, Graph, VertexId}
 import org.apache.spark.mllib.linalg.distributed.{CoordinateMatrix, MatrixEntry}
 import org.apache.spark.rdd.RDD
+import org.apache.spark.sql.SparkSession
 
 object SimRankpp {
   val simRank = SimRank
-
   /**
    * UnDirectedGraph 생성 후 반환
    *
@@ -15,15 +15,15 @@ object SimRankpp {
    * @return
    */
   def getUnDirectedGraphFromRawEdges(rawEdges: RDD[(String, String, Double)]) = {
-    val nodeWithIndex = rawEdges.map(_._1).union(rawEdges.map(_._2)).distinct().zipWithIndex()
-    val vertices: RDD[(VertexId, String)] = nodeWithIndex.map(x => (x._2, x._1))
+    val nodeWithIndex = rawEdges.map(x => (x._1, "q")).union(rawEdges.map(x => (x._2, "d"))).distinct().zipWithIndex()
+    val vertices: RDD[(VertexId, (String, String))] = nodeWithIndex.map(x => (x._2, (x._1._1, x._1._2)))// VertexId, String, TypeString
     val edges: RDD[Edge[Double]] = rawEdges.map {
       x => // srcIdString, dstIdString, Weight
         (x._1, (x._2, x._3))
-    }.join(nodeWithIndex).map {
+    }.join(vertices.map(x => (x._2._1, x._1))).map {
       x => // dstIdString, srcId, Weight
         (x._2._1._1, (x._2._2, x._2._1._2))
-    }.join(nodeWithIndex).map {
+    }.join(vertices.map(x => (x._2._1, x._1))).map {
       x => // srcId, dstId, Weight
         Edge(x._2._1._1, x._2._2, x._2._1._2)
     }
@@ -37,7 +37,7 @@ object SimRankpp {
     //    )
     graph
   }
-  def getWeightedNormalizeEdges(graph: Graph[String, Double]) = {
+  def getWeightedNormalizeEdges(graph: Graph[(String, String), Double]) = {
     val sumEdges = graph.collectEdges(EdgeDirection.In).map {
       x =>
         val vertexId = x._1
@@ -58,7 +58,7 @@ object SimRankpp {
         (
           x._2._1._1, // srcId
           x._1, // dstId
-          x._2._2._2 * x._2._1._2 / x._2._2._1 // Spread * Normalize Edge Weight
+          x._2._2._2 * x._2._1._2 / x._2._2._1 // Normalize Edge Weight
         )
     }
 
@@ -66,7 +66,7 @@ object SimRankpp {
     normalizedEdges
   }
 
-  def getEvidenceMatrix(graph: Graph[String, Double]) = {
+  def getEvidenceMatrix(graph: Graph[(String, String), Double]) = {
     def calculateEvidence(n: Int): Double = {
       var res = 0.0
       var div = 2
@@ -100,7 +100,7 @@ object SimRankpp {
     evidenceMatrix
   }
 
-  def getResultMatrix(graph: Graph[String, Double], normalizedEdges: RDD[(VertexId, VertexId, Double)], importantFactor: Double = 0.8, iteration: Int = 10) = {
+  def getResultMatrix(graph: Graph[(String, String), Double], normalizedEdges: RDD[(VertexId, VertexId, Double)], importantFactor: Double = 0.8, iteration: Int = 10) = {
     val numOfVertices = graph.vertices.count()
     val tempGraph = Graph(graph.vertices, normalizedEdges.map(x => Edge[Double](x._1, x._2, x._3.toDouble)))
     val initVertices = tempGraph.collectEdges(EdgeDirection.In).map {
@@ -112,9 +112,14 @@ object SimRankpp {
         (vertexId, sumOfEdges)
     }
     // TODO 다 0인데 ??
-    val identityMatrix = new CoordinateMatrix(initVertices.map { x =>
-      MatrixEntry(x._1, x._1, 1 - x._2)
+//    val identityMatrix = new CoordinateMatrix(initVertices.map { x =>
+//      MatrixEntry(x._1, x._1, 1 - x._2)
+//    }, nRows = numOfVertices, nCols = numOfVertices)
+
+    val identityMatrix = new CoordinateMatrix(graph.vertices.map { x =>
+      MatrixEntry(x._1, x._1, 1)
     }, nRows = numOfVertices, nCols = numOfVertices)
+
 
     val weightMatrix = new CoordinateMatrix(normalizedEdges
       .map {
@@ -160,7 +165,25 @@ object SimRankpp {
     resultMatrix
   }
 
-  def displayResultMatrix(resultMatrix: CoordinateMatrix, graph: Graph[String, Double]) = {
-    simRank.displayResultMatrix(resultMatrix, graph)
+  def getResultDataFrame(spark: SparkSession, resultMatrix: CoordinateMatrix, graph: Graph[(String, String), Double]) = {
+    /**
+     * 단순한 Display
+     * SrcId != DstId
+     * SrdId 별로, Similarity 내림차순
+     */
+
+    val queryVertices = graph.vertices.filter(x => x._2._2 == "q")
+    val result = resultMatrix.entries.map {
+      case MatrixEntry(x, y, w) => (x, y, "%4.3f" format w)
+    }
+      .map(x => (x._1, (x._2, x._3))) // x, (y, w)
+      .join(queryVertices.map(x => (x._1, x._2._1))) // vertexIdx, xName
+      .map(x => (x._2._1._1, (x._2._2, x._2._1._2))) // y, (Name, w)
+      .join(queryVertices.map(x => (x._1, x._2._1))) // vertexIdy, yName
+      .map(x => (x._2._1._1, x._2._2, x._2._1._2)) // xName, yName, w
+      .filter(x => x._1 != x._2)
+      .sortBy(x => (x._1, x._3))
+
+    spark.createDataFrame(result).toDF("query", "relQueries", "weight")
   }
 }

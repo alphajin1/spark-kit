@@ -18,6 +18,7 @@ object SimRankppEx01 {
     val resultMatrix = SimRankpp.getResultMatrix(graph, normalizedEdges)
 
     logger.warn("[START] resultMatrix")
-    SimRankpp.displayResultMatrix(resultMatrix, graph)
+    val resultDF = SimRankpp.getResultDataFrame(spark, resultMatrix, graph)
+    resultDF.show(20, false)
   }
 }
