@@ -9,7 +9,7 @@ object SimRankppEx01 {
     val logger = Logger.getRootLogger
     val (spark, sc) = MySparkSession.getDefault(s"${this.getClass.getSimpleName}")
 
-    val df = spark.read.csv("data/simrank/simrank_pp_fig6.csv")
+    val df = spark.read.csv("data/simrank/simrank_pp_fig4.csv")
     val rawEdges: RDD[(String, String, Double)] = df.rdd.map(x => (x.getString(0), x.getString(1), x.getString(2).toDouble))
 
     // SimRank [2] 논문의 경우 *UnDirectedGraph* 이다.

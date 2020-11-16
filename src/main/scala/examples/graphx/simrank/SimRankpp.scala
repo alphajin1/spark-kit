@@ -79,13 +79,23 @@ object SimRankpp {
     }
 
     val numOfVertices = graph.vertices.count()
-    val neighbors = graph.collectNeighborIds(EdgeDirection.In)
+    val vertexWithNeighbors = graph.collectNeighborIds(EdgeDirection.In) // v, neighbors
+    val vertexWith2distVertex = vertexWithNeighbors.flatMap {
+      x => x._2.map(y => (y, x._1)) // (neighborVertex, vertex)
+    }.join(vertexWithNeighbors).map {
+      x => (x._2._1, x._2._2) // vertex, neighborsOfNeighbors
+    }.flatMap {
+      x => x._2.map(y => (y, x._1)) // vertex, vertex with 2 dist
+    }
+
     val evidenceMatrix = new CoordinateMatrix(
-      neighbors.cartesian(neighbors).map {
+      vertexWith2distVertex.join(vertexWithNeighbors).map {
+        x => (x._2._1, (x._1, x._2._2)) // 2dist vertex, vertex, neighbors(v)
+      }.join(vertexWithNeighbors).map {
         x =>
-          val srcId = x._1._1
-          val srcNeighbors = x._1._2
-          val dstId = x._2._1
+          val srcId = x._2._1._1
+          val srcNeighbors = x._2._1._2
+          val dstId = x._1
           val dstNeighbors = x._2._2
 
           val commonEdges = srcNeighbors.intersect(dstNeighbors).length
@@ -111,10 +121,6 @@ object SimRankpp {
 
         (vertexId, sumOfEdges)
     }
-    // TODO 다 0인데 ??
-    //    val identityMatrix = new CoordinateMatrix(initVertices.map { x =>
-    //      MatrixEntry(x._1, x._1, 1 - x._2)
-    //    }, nRows = numOfVertices, nCols = numOfVertices)
 
     val identityMatrix = new CoordinateMatrix(graph.vertices.map { x =>
       MatrixEntry(x._1, x._1, 1)
@@ -127,15 +133,27 @@ object SimRankpp {
           MatrixEntry(x._1, x._2, x._3)
       }, nRows = numOfVertices, nCols = numOfVertices)
 
+    // CustomMultiply
+    def multiply(left: CoordinateMatrix, right: CoordinateMatrix): CoordinateMatrix = {
+      val leftEntries = left.entries.map({ case MatrixEntry(i, j, v) => (j, (i, v)) })
+      val rightEntries = right.entries.map({ case MatrixEntry(j, k, w) => (j, (k, w)) })
+
+      val productEntries = leftEntries
+        .join(rightEntries)
+        .map({ case (_, ((i, v), (k, w))) => ((i, k), (v * w)) })
+        .reduceByKey(_ + _)
+        .map({ case ((i, k), sum) => MatrixEntry(i, k, sum) })
+
+      new CoordinateMatrix(productEntries)
+    }
+
     var tempMatrix = identityMatrix
     var atsaMatrix = tempMatrix
     for (i <- 0 to iteration) {
       logger.warn(s"Iteration $i started.")
       atsaMatrix = new CoordinateMatrix(
-        weightMatrix.toBlockMatrix.transpose
-          .multiply(tempMatrix.toBlockMatrix)
-          .multiply(weightMatrix.toBlockMatrix)
-          .toCoordinateMatrix.entries.map {
+        multiply(multiply(weightMatrix.transpose, tempMatrix), weightMatrix)
+          .entries.map {
           x =>
 
             var w = x.value * importantFactor
