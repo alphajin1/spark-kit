@@ -1,12 +1,14 @@
 package examples.graphx.simrank
 
-import examples.graphx.simrank.SimRank.logger
+import org.apache.log4j.Logger
 import org.apache.spark.graphx.{Edge, EdgeDirection, Graph, VertexId}
 import org.apache.spark.mllib.linalg.distributed.{CoordinateMatrix, MatrixEntry}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 
 object SimRankpp {
+
+  val logger = Logger.getRootLogger
   /**
    * UnDirectedGraph 생성 후 반환
    *
