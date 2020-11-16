@@ -202,7 +202,6 @@ object SimRankpp {
       .join(queryVertices.map(x => (x._1, x._2._1))) // vertexIdy, yName
       .map(x => (x._2._1._1, x._2._2, x._2._1._2)) // xName, yName, w
       .filter(x => x._1 != x._2)
-      .sortBy(x => (x._1, x._3))
 
     spark.createDataFrame(result).toDF("query", "relQueries", "weight")
   }
