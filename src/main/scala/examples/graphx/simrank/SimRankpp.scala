@@ -7,7 +7,6 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
 
 object SimRankpp {
-  val simRank = SimRank
   /**
    * UnDirectedGraph 생성 후 반환
    *
@@ -16,7 +15,7 @@ object SimRankpp {
    */
   def getUnDirectedGraphFromRawEdges(rawEdges: RDD[(String, String, Double)]) = {
     val nodeWithIndex = rawEdges.map(x => (x._1, "q")).union(rawEdges.map(x => (x._2, "d"))).distinct().zipWithIndex()
-    val vertices: RDD[(VertexId, (String, String))] = nodeWithIndex.map(x => (x._2, (x._1._1, x._1._2)))// VertexId, String, TypeString
+    val vertices: RDD[(VertexId, (String, String))] = nodeWithIndex.map(x => (x._2, (x._1._1, x._1._2))) // VertexId, String, TypeString
     val edges: RDD[Edge[Double]] = rawEdges.map {
       x => // srcIdString, dstIdString, Weight
         (x._1, (x._2, x._3))
@@ -37,6 +36,7 @@ object SimRankpp {
     //    )
     graph
   }
+
   def getWeightedNormalizeEdges(graph: Graph[(String, String), Double]) = {
     val sumEdges = graph.collectEdges(EdgeDirection.In).map {
       x =>
@@ -112,9 +112,9 @@ object SimRankpp {
         (vertexId, sumOfEdges)
     }
     // TODO 다 0인데 ??
-//    val identityMatrix = new CoordinateMatrix(initVertices.map { x =>
-//      MatrixEntry(x._1, x._1, 1 - x._2)
-//    }, nRows = numOfVertices, nCols = numOfVertices)
+    //    val identityMatrix = new CoordinateMatrix(initVertices.map { x =>
+    //      MatrixEntry(x._1, x._1, 1 - x._2)
+    //    }, nRows = numOfVertices, nCols = numOfVertices)
 
     val identityMatrix = new CoordinateMatrix(graph.vertices.map { x =>
       MatrixEntry(x._1, x._1, 1)
