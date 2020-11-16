@@ -146,7 +146,6 @@ object SimRankpp {
         .map({ case (_, ((i, v), (k, w))) => ((i, k), (v * w)) })
         .reduceByKey(_ + _)
         .map({ case ((i, k), sum) => MatrixEntry(i, k, sum) })
-        .filter(x => x.value > 0.0)
 
       new CoordinateMatrix(productEntries, nRows, nCols)
     }
@@ -168,7 +167,7 @@ object SimRankpp {
             }
 
             MatrixEntry(x.i, x.j, w)
-        }, nRows = numOfVertices, nCols = numOfVertices)
+        }.filter(x => x.value > 0.000), nRows = numOfVertices, nCols = numOfVertices)
 
       tempMatrix = atsaMatrix
     }
@@ -182,7 +181,7 @@ object SimRankpp {
       }).map {
         x => MatrixEntry(x._1._1, x._1._2, x._2._1 * x._2._2)
       }.filter {
-        x => x.value > 0.0
+        x => x.value > 0.000
       }
     )
 
