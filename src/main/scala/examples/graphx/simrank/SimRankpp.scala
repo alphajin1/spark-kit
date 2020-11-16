@@ -9,6 +9,7 @@ import org.apache.spark.sql.SparkSession
 object SimRankpp {
 
   val logger = Logger.getRootLogger
+
   /**
    * UnDirectedGraph 생성 후 반환
    *
@@ -136,7 +137,7 @@ object SimRankpp {
       }, nRows = numOfVertices, nCols = numOfVertices)
 
     // CustomMultiply
-    def multiply(left: CoordinateMatrix, right: CoordinateMatrix): CoordinateMatrix = {
+    def multiply(left: CoordinateMatrix, right: CoordinateMatrix, nRows: Long, nCols: Long): CoordinateMatrix = {
       val leftEntries = left.entries.map({ case MatrixEntry(i, j, v) => (j, (i, v)) })
       val rightEntries = right.entries.map({ case MatrixEntry(j, k, w) => (j, (k, w)) })
 
@@ -145,8 +146,9 @@ object SimRankpp {
         .map({ case (_, ((i, v), (k, w))) => ((i, k), (v * w)) })
         .reduceByKey(_ + _)
         .map({ case ((i, k), sum) => MatrixEntry(i, k, sum) })
+        .filter(x => x.value > 0)
 
-      new CoordinateMatrix(productEntries)
+      new CoordinateMatrix(productEntries, nRows, nCols)
     }
 
     var tempMatrix = identityMatrix
@@ -154,12 +156,14 @@ object SimRankpp {
     for (i <- 0 to iteration) {
       logger.warn(s"Iteration $i started.")
       atsaMatrix = new CoordinateMatrix(
-        multiply(multiply(weightMatrix.transpose, tempMatrix), weightMatrix)
+        multiply(
+          multiply(weightMatrix.transpose, tempMatrix, numOfVertices, numOfVertices),
+          weightMatrix, numOfVertices, numOfVertices)
           .entries.map {
           x =>
 
             var w = x.value * importantFactor
-            if (x.i == x.j && w < 1.0) {
+            if (x.i == x.j) {
               w = 1.0
             }
 
