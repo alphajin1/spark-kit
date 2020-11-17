@@ -32,7 +32,7 @@ object SimRankpp {
 
     // UnDirected Graph
     val graph = Graph(vertices, edges.union(edges.map(x => Edge(x.dstId, x.srcId, x.attr))))
-    //    그래프 생성 완료 / from Only Edges
+    //    DEBUG : 그래프 생성 완료 / from Only Edges
     //    graph.triplets.foreach(
     //      x =>
     //        println(x.srcAttr, x.dstAttr, x.attr)
@@ -40,33 +40,58 @@ object SimRankpp {
     graph
   }
 
-  def getWeightedNormalizeEdges(graph: Graph[(String, String), Double]) = {
-    val sumEdges = graph.collectEdges(EdgeDirection.In).map {
+  def getSpreadNormalizedEdges(graph: Graph[(String, String), Double]) = {
+    val vertexWithSumOfEdges = graph.collectEdges(EdgeDirection.In).map {
       x =>
         val vertexId = x._1
         val neighbors = x._2
         val sumOfEdges = neighbors.map(x => x.attr).sum
-        val meanOfEdges = sumOfEdges / neighbors.length
-        val variance = neighbors.map(x => Math.pow(x.attr - meanOfEdges, 2)).sum / neighbors.length
-        val spread = Math.exp(-variance)
-        (vertexId, (sumOfEdges, spread))
+        (vertexId, sumOfEdges)
     }
 
     val normalizedEdges = graph.edges.map {
       x =>
         // Reverse edge
         (x.dstId, (x.srcId, x.attr))
-    }.join(sumEdges).map {
+    }.join(vertexWithSumOfEdges).map {
+      x =>
+        (
+          Edge(x._2._1._1, // srcId
+            x._1, // dstId
+            x._2._1._2 / x._2._2) // Normalize Edge Weight
+          )
+    }
+
+    val tempGraph = Graph(graph.vertices, normalizedEdges)
+    val vertexWithSpread =
+      tempGraph.collectEdges(EdgeDirection.In).map {
+        x =>
+          val vertexId = x._1
+          val neighbors = x._2
+          val sumOfEdges = neighbors.map(x => x.attr).sum
+          val meanOfEdges = sumOfEdges / neighbors.length
+          val variance = neighbors.map(x => Math.pow(x.attr - meanOfEdges, 2)).sum / neighbors.length
+          val spread = Math.exp(-variance)
+
+          (vertexId, spread)
+      }
+
+    val spreadNormalizedEdges = tempGraph.edges.map {
+      x =>
+        // Reverse edge
+        (x.dstId, (x.srcId, x.attr))
+    }.join(vertexWithSpread).map {
       x =>
         (
           x._2._1._1, // srcId
           x._1, // dstId
-          x._2._2._2 * x._2._1._2 / x._2._2._1 // Normalize Edge Weight
+          x._2._1._2 * x._2._2 // NormalizedEdge * Spread
         )
+
     }
 
 
-    normalizedEdges
+    spreadNormalizedEdges
   }
 
   def getEvidenceMatrix(graph: Graph[(String, String), Double]) = {
@@ -89,7 +114,7 @@ object SimRankpp {
       x => (x._2._1, x._2._2) // vertex, neighborsOfNeighbors
     }.flatMap {
       x => x._2.map(y => (y, x._1)) // vertex, vertex with 2 dist
-    }
+    }.distinct()
 
     val evidenceMatrix = new CoordinateMatrix(
       vertexWith2distVertex.join(vertexWithNeighbors).map {
@@ -105,7 +130,7 @@ object SimRankpp {
           (srcId, dstId, calculateEvidence(commonEdges))
       }.map {
         e => (e._1, e._2, e._3)
-      }.filter(x => x._3 > 0.0 && x._1 != x._2).map {
+      }.map {
         x => MatrixEntry(x._1, x._2, x._3)
       }, nRows = numOfVertices, nCols = numOfVertices
     )
@@ -146,7 +171,7 @@ object SimRankpp {
         .map({ case (_, ((i, v), (k, w))) => ((i, k), (v * w)) })
         .reduceByKey(_ + _)
         .map({ case ((i, k), sum) => MatrixEntry(i, k, sum) })
-
+        .filter(x => x.value > 0.0)
       new CoordinateMatrix(productEntries, nRows, nCols)
     }
 
@@ -167,23 +192,21 @@ object SimRankpp {
             }
 
             MatrixEntry(x.i, x.j, w)
-        }.filter(x => x.value > 0.000), nRows = numOfVertices, nCols = numOfVertices)
+        }, nRows = numOfVertices, nCols = numOfVertices)
 
       tempMatrix = atsaMatrix
     }
 
     val evidenceMatrix = getEvidenceMatrix(graph)
     val resultMatrix = new CoordinateMatrix(
-      evidenceMatrix.entries.map {
+      evidenceMatrix.entries.map { // ElementWise Product
         x => ((x.i, x.j), x.value)
       }.join(atsaMatrix.entries.map {
         x => ((x.i, x.j), x.value)
       }).map {
-        x => MatrixEntry(x._1._1, x._1._2, x._2._1 * x._2._2)
-      }.filter {
-        x => x.value > 0.000
-      }
-    )
+        x =>
+          MatrixEntry(x._1._1, x._1._2, x._2._1 * x._2._2)
+      }, nRows = numOfVertices, nCols = numOfVertices)
 
     resultMatrix
   }
@@ -197,14 +220,13 @@ object SimRankpp {
 
     val queryVertices = graph.vertices.filter(x => x._2._2 == "q")
     val result = resultMatrix.entries.map {
-      case MatrixEntry(x, y, w) => (x, y, "%4.3f" format w)
-    }
+      case MatrixEntry(x, y, w) => (x, y, w)
+    }.filter(x => x._1 != x._2)
       .map(x => (x._1, (x._2, x._3))) // x, (y, w)
       .join(queryVertices.map(x => (x._1, x._2._1))) // vertexIdx, xName
-      .map(x => (x._2._1._1, (x._2._2, x._2._1._2))) // y, (Name, w)
+      .map(x => (x._2._1._1, (x._2._2, x._2._1._2))) // y, (xName, w)
       .join(queryVertices.map(x => (x._1, x._2._1))) // vertexIdy, yName
       .map(x => (x._2._1._1, x._2._2, x._2._1._2)) // xName, yName, w
-      .filter(x => x._1 != x._2)
 
     spark.createDataFrame(result).toDF("query", "relQueries", "weight")
   }
