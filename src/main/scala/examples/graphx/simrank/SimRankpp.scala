@@ -183,7 +183,7 @@ object SimRankpp {
             }
 
             MatrixEntry(x.i, x.j, w)
-        }, nRows = numOfVertices, nCols = numOfVertices)
+        }.filter(x => x.value > 0.0), nRows = numOfVertices, nCols = numOfVertices)
 
       tempMatrix = atsaMatrix
     }
@@ -199,7 +199,7 @@ object SimRankpp {
       }).map {
         x =>
           MatrixEntry(x._1._1, x._1._2, x._2._1 * x._2._2)
-      }, nRows = numOfVertices, nCols = numOfVertices)
+      }.filter(x => x.value > 0.0), nRows = numOfVertices, nCols = numOfVertices)
 
     resultMatrix
   }
