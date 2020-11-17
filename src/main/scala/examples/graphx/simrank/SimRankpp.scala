@@ -201,7 +201,7 @@ object SimRankpp {
           MatrixEntry(x._1._1, x._1._2, x._2._1 * x._2._2)
       }, nRows = numOfVertices, nCols = numOfVertices)
 
-    (resultMatrix, evidenceMatrix, atsaMatrix)
+    resultMatrix
   }
 
   def getResultDataFrame(spark: SparkSession, resultMatrix: CoordinateMatrix, graph: Graph[(String, String), Double]) = {
