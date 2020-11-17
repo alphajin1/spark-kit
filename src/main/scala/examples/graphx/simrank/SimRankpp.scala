@@ -97,7 +97,7 @@ object SimRankpp {
   def getEvidenceMatrix(graph: Graph[(String, String), Double]) = {
     def calculateEvidence(n: Int): Double = {
       var res = 0.0
-      var div = 2
+      var div = 2.0
       for (i <- 0 until n) {
         res += 1.0 / div
         div *= 2
@@ -141,15 +141,6 @@ object SimRankpp {
   def getResultMatrix(graph: Graph[(String, String), Double], normalizedEdges: RDD[(VertexId, VertexId, Double)], importantFactor: Double = 0.8, iteration: Int = 10) = {
     val numOfVertices = graph.vertices.count()
     val tempGraph = Graph(graph.vertices, normalizedEdges.map(x => Edge[Double](x._1, x._2, x._3.toDouble)))
-    val initVertices = tempGraph.collectEdges(EdgeDirection.In).map {
-      x =>
-        val vertexId = x._1
-        val neighbors = x._2
-        val sumOfEdges = neighbors.map(x => x.attr).sum
-
-        (vertexId, sumOfEdges)
-    }
-
     val identityMatrix = new CoordinateMatrix(graph.vertices.map { x =>
       MatrixEntry(x._1, x._1, 1)
     }, nRows = numOfVertices, nCols = numOfVertices)
@@ -200,15 +191,17 @@ object SimRankpp {
     val evidenceMatrix = getEvidenceMatrix(graph)
     val resultMatrix = new CoordinateMatrix(
       evidenceMatrix.entries.map { // ElementWise Product
-        x => ((x.i, x.j), x.value)
+        x =>
+          ((x.i, x.j), x.value)
       }.join(atsaMatrix.entries.map {
-        x => ((x.i, x.j), x.value)
+        x =>
+          ((x.i, x.j), x.value)
       }).map {
         x =>
           MatrixEntry(x._1._1, x._1._2, x._2._1 * x._2._2)
       }, nRows = numOfVertices, nCols = numOfVertices)
 
-    resultMatrix
+    (resultMatrix, evidenceMatrix, atsaMatrix)
   }
 
   def getResultDataFrame(spark: SparkSession, resultMatrix: CoordinateMatrix, graph: Graph[(String, String), Double]) = {
