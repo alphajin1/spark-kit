@@ -18,7 +18,7 @@ object SimRankppEx01 {
     // SimRank [2] 논문의 경우 *UnDirectedGraph* 이다.
     val graph = SimRankpp.getUnDirectedGraphFromRawEdges(rawEdges)
     val normalizedEdges = SimRankpp.getSpreadNormalizedEdges(graph)
-    val resultMatrix = SimRankpp.getResultMatrix(graph, normalizedEdges, 0.8, 1)
+    val resultMatrix = SimRankpp.getResultMatrix(graph, normalizedEdges, importantFactor = 0.8, deltaThreshold = 0.05, iteration = 1)
 
     logger.warn("[START] resultMatrix")
     val result1DF = SimRankpp.getResultDataFrame(spark, resultMatrix, graph)

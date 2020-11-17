@@ -5,6 +5,7 @@ import org.apache.spark.graphx.{Edge, EdgeDirection, Graph, VertexId}
 import org.apache.spark.mllib.linalg.distributed.{CoordinateMatrix, MatrixEntry}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.SparkSession
+import scala.collection.mutable.ListBuffer
 
 object SimRankpp {
 
@@ -138,7 +139,7 @@ object SimRankpp {
     evidenceMatrix
   }
 
-  def getResultMatrix(graph: Graph[(String, String), Double], normalizedEdges: RDD[(VertexId, VertexId, Double)], importantFactor: Double = 0.8, iteration: Int = 10) = {
+  def getResultMatrix(graph: Graph[(String, String), Double], normalizedEdges: RDD[(VertexId, VertexId, Double)], importantFactor: Double = 0.8, deltaThreshold: Double = 0.05, iteration: Int = 10) = {
     val numOfVertices = graph.vertices.count()
     val tempGraph = Graph(graph.vertices, normalizedEdges.map(x => Edge[Double](x._1, x._2, x._3.toDouble)))
     val identityMatrix = new CoordinateMatrix(graph.vertices.map { x =>
@@ -166,6 +167,15 @@ object SimRankpp {
       new CoordinateMatrix(productEntries, nRows, nCols)
     }
 
+
+    // Iteration 별 Threshold 설정
+    val tempThresholds = new ListBuffer[Double]()
+    for (i <- 0 to iteration) {
+      val tmp = deltaThreshold / (iteration * Math.pow(importantFactor, iteration - i + 1))
+      tempThresholds.append(tmp)
+    }
+    val thresholds = tempThresholds.toList
+
     var tempMatrix = identityMatrix
     var atsaMatrix = tempMatrix
     for (i <- 0 to iteration) {
@@ -183,7 +193,7 @@ object SimRankpp {
             }
 
             MatrixEntry(x.i, x.j, w)
-        }.filter(x => x.value > 0.0), nRows = numOfVertices, nCols = numOfVertices)
+        }.filter(x => x.value > thresholds(i)), nRows = numOfVertices, nCols = numOfVertices)
 
       tempMatrix = atsaMatrix
     }
@@ -199,7 +209,7 @@ object SimRankpp {
       }).map {
         x =>
           MatrixEntry(x._1._1, x._1._2, x._2._1 * x._2._2)
-      }.filter(x => x.value > 0.0), nRows = numOfVertices, nCols = numOfVertices)
+      }.filter(x => x.value > thresholds(iteration)), nRows = numOfVertices, nCols = numOfVertices)
 
     resultMatrix
   }
